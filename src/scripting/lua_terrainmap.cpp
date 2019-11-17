@@ -235,7 +235,7 @@ mapgen_gamemap* luaW_pushmap(lua_State *L, T&&... params)
  * - Arg 2: int, height
  * - Arg 3: string, terrain
 */
-int intf_terainmap_create(lua_State *L)
+int intf_terrainmap_create(lua_State *L)
 {
 	if(lua_isnumber(L, 1) && lua_isnumber(L, 2)) {
 		int w = lua_tonumber(L, 1);
@@ -254,7 +254,7 @@ int intf_terainmap_create(lua_State *L)
 /**
  * Destroys a map object before it is collected (__gc metamethod).
  */
-static int impl_terainmap_collect(lua_State *L)
+static int impl_terrainmap_collect(lua_State *L)
 {
 	mapgen_gamemap *u = static_cast<mapgen_gamemap*>(lua_touserdata(L, 1));
 	u->mapgen_gamemap::~mapgen_gamemap();
@@ -267,7 +267,7 @@ static int impl_terainmap_collect(lua_State *L)
  * - Arg 2: string containing the name of the property.
  * - Ret 1: something containing the attribute.
  */
-static int impl_terainmap_get(lua_State *L)
+static int impl_terrainmap_get(lua_State *L)
 {
 	mapgen_gamemap& tm = luaW_checkterrainmap(L, 1);
 	char const *m = luaL_checkstring(L, 2);
@@ -293,7 +293,7 @@ static int impl_terainmap_get(lua_State *L)
  * - Arg 2: string containing the name of the property.
  * - Arg 3: something containing the attribute.
  */
-static int impl_terainmap_set(lua_State *L)
+static int impl_terrainmap_set(lua_State *L)
 {
 	mapgen_gamemap& tm = luaW_checkterrainmap(L, 1);
 	UNUSED(tm);
@@ -451,15 +451,15 @@ namespace lua_terrainmap {
 		cmd_out << "Adding terrainmamap metatable...\n";
 
 		luaL_newmetatable(L, terrinmapKey);
-		lua_pushcfunction(L, impl_terainmap_collect);
+		lua_pushcfunction(L, impl_terrainmap_collect);
 		lua_setfield(L, -2, "__gc");
-		lua_pushcfunction(L, impl_terainmap_get);
+		lua_pushcfunction(L, impl_terrainmap_get);
 		lua_setfield(L, -2, "__index");
-		lua_pushcfunction(L, impl_terainmap_set);
+		lua_pushcfunction(L, impl_terrainmap_set);
 		lua_setfield(L, -2, "__newindex");
-		lua_pushstring(L, "terainmap");
+		lua_pushstring(L, "terrainmap");
 		lua_setfield(L, -2, "__metatable");
-		// terainmap methods
+		// terrainmap methods
 		lua_pushcfunction(L, intf_set_terrain);
 		lua_setfield(L, -2, "set_terrain");
 		lua_pushcfunction(L, intf_get_terrain);
