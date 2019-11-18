@@ -79,6 +79,7 @@
 #include "scripting/lua_pathfind_cost_calculator.hpp"
 #include "scripting/lua_race.hpp"
 #include "scripting/lua_team.hpp"
+#include "scripting/lua_terrainmap.hpp"
 #include "scripting/lua_unit_type.hpp"
 #include "scripting/push_check.hpp"
 #include "synced_commands.hpp"
@@ -209,83 +210,6 @@ std::vector<int> game_lua_kernel::get_sides_vector(const vconfig& cfg)
 
 	side_filter filter(sides.str(), &game_state_);
 	return filter.get_teams();
-}
-
-
-
-static int special_locations_len(lua_State *L)
-{
-	lua_pushnumber(L, lua_kernel_base::get_lua_kernel<game_lua_kernel>(L).map().special_locations().size());
-	return 1;
-}
-
-static int special_locations_next(lua_State *L)
-{
-	const t_translation::starting_positions::left_map& left = lua_kernel_base::get_lua_kernel<game_lua_kernel>(L).map().special_locations().left;
-
-	t_translation::starting_positions::left_const_iterator it;
-	if (lua_isnoneornil(L, 2)) {
-		it = left.begin();
-	}
-	else {
-		it = left.find(luaL_checkstring(L, 2));
-		if (it == left.end()) {
-			return 0;
-		}
-		++it;
-	}
-	if (it == left.end()) {
-		return 0;
-	}
-	lua_pushstring(L, it->first.c_str());
-	luaW_pushlocation(L, it->second);
-	return 2;
-}
-
-static int special_locations_pairs(lua_State *L)
-{
-	lua_pushcfunction(L, &special_locations_next);
-	lua_pushvalue(L, -2);
-	lua_pushnil(L);
-	return 3;
-}
-
-static int special_locations_index(lua_State *L)
-{
-	const t_translation::starting_positions::left_map& left = lua_kernel_base::get_lua_kernel<game_lua_kernel>(L).map().special_locations().left;
-	auto it = left.find(luaL_checkstring(L, 2));
-	if (it == left.end()) {
-		return 0;
-	}
-	else {
-		luaW_pushlocation(L, it->second);
-		return 1;
-	}
-}
-
-static int special_locations_newindex(lua_State *L)
-{
-	lua_pushstring(L, "special locations cannot be modified using wesnoth.special_locations");
-	return lua_error(L);
-}
-
-static void push_locations_table(lua_State *L)
-{
-	lua_newtable(L); // The functor table
-	lua_newtable(L); // The functor metatable
-	lua_pushstring(L, "__len");
-	lua_pushcfunction(L, &special_locations_len);
-	lua_rawset(L, -3);
-	lua_pushstring(L, "__index");
-	lua_pushcfunction(L, &special_locations_index);
-	lua_rawset(L, -3);
-	lua_pushstring(L, "__newindex");
-	lua_pushcfunction(L, &special_locations_newindex);
-	lua_rawset(L, -3);
-	lua_pushstring(L, "__pairs");
-	lua_pushcfunction(L, &special_locations_pairs);
-	lua_rawset(L, -3);
-	lua_setmetatable(L, -2); // Apply the metatable to the functor table
 }
 
 namespace {
@@ -982,102 +906,6 @@ int game_lua_kernel::intf_set_terrain(lua_State *L)
 
 	if (game_display_) {
 		game_display_->needs_rebuild(result);
-	}
-
-	return 0;
-}
-
-/**
- * Reaplces part of the map.
- * - Arg 1: map location.
- * - Arg 2: map data string.
- * - Arg 3: table for optional named arguments
- *   - is_odd: boolen, if Arg2 has the odd mapo format (as if it was cut from a odd map location)
- *   - ignore_special_locations: boolean
- *   - rules: table of tables
-*/
-int game_lua_kernel::intf_terrain_mask(lua_State *L)
-{
-	map_location loc = luaW_checklocation(L, 1);
-	std::string t_str(luaL_checkstring(L, 2));
-	bool is_odd = false;
-	bool ignore_special_locations = false;
-	std::vector<gamemap::overlay_rule> rules;
-
-	if(lua_istable(L, 3)) {
-		if(luaW_tableget(L, 3, "is_odd")) {
-			is_odd = luaW_toboolean(L, -1);
-			lua_pop(L, 1);
-		}
-		if(luaW_tableget(L, 3, "ignore_special_locations")) {
-			ignore_special_locations = luaW_toboolean(L, -1);
-			lua_pop(L, 1);
-		}
-		if(luaW_tableget(L, 3, "rules")) {
-			//todo: reduce code dublication by using read_rules_vector.
-			if(!lua_istable(L, -1)) {
-				return luaL_argerror(L, 3, "rules must be a table");
-			}
-
-			for (int i = 1, i_end = lua_rawlen(L, -1); i <= i_end; ++i)
-			{
-				lua_rawgeti(L, -1, i);
-				if(!lua_istable(L, -1)) {
-					return luaL_argerror(L, 3, "rules must be a table of tables");
-				}
-				rules.push_back(gamemap::overlay_rule());
-				auto& rule = rules.back();
-				if(luaW_tableget(L, -1, "old")) {
-					rule.old_ = t_translation::read_list(luaW_tostring(L, -1));
-					lua_pop(L, 1);
-				}
-
-				if(luaW_tableget(L, -1, "new")) {
-					rule.new_ = t_translation::read_list(luaW_tostring(L, -1));
-					lua_pop(L, 1);
-				}
-
-				if(luaW_tableget(L, -1, "mode")) {
-					auto str = luaW_tostring(L, -1);
-					rule.mode_ = str == "base" ? terrain_type_data::BASE : (str == "overlay" ? terrain_type_data::OVERLAY : terrain_type_data::BOTH);
-					lua_pop(L, 1);
-				}
-
-				if(luaW_tableget(L, -1, "terrain")) {
-					const t_translation::ter_list terrain = t_translation::read_list(luaW_tostring(L, -1));
-					if(!terrain.empty()) {
-						rule.terrain_ = terrain[0];
-					}
-					lua_pop(L, 1);
-				}
-
-				if(luaW_tableget(L, -1, "use_old")) {
-					rule.use_old_ = luaW_toboolean(L, -1);
-					lua_pop(L, 1);
-				}
-
-				if(luaW_tableget(L, -1, "replace_if_failed")) {
-					rule.replace_if_failed_ = luaW_toboolean(L, -1);
-					lua_pop(L, 1);
-				}
-
-				lua_pop(L, 1);
-			}
-			lua_pop(L, 1);
-		}
-	}
-
-
-	gamemap mask_map("");
-	mask_map.read(t_str, false);
-	board().map().overlay(mask_map, loc, rules, is_odd, ignore_special_locations);
-
-	for(team& t : board().teams()) {
-		t.fix_villages(board().map());
-	}
-
-	if (game_display_) {
-		game_display_->needs_rebuild(true);
 	}
 
 	return 0;
@@ -4205,6 +4033,7 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 		{ "add_known_unit",           &intf_add_known_unit           },
 		{ "create_animator",          &dispatch<&game_lua_kernel::intf_create_animator>          },
 		{ "eval_conditional",         &intf_eval_conditional         },
+		{ "get_map",                  &intf_terrainmap_get           },
 		{ "get_era",                  &intf_get_era                  },
 		{ "get_resource",             &intf_get_resource             },
 		{ "get_traits",               &intf_get_traits               },
@@ -4270,7 +4099,6 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 		{ "simulate_combat",           &dispatch<&game_lua_kernel::intf_simulate_combat            >        },
 		{ "synchronize_choice",        &intf_synchronize_choice                                             },
 		{ "synchronize_choices",       &intf_synchronize_choices                                            },
-		{ "terrain_mask",              &dispatch<&game_lua_kernel::intf_terrain_mask               >        },
 		{ "teleport",                  &dispatch<&game_lua_kernel::intf_teleport                   >        },
 		{ "place_shroud",              &dispatch2<&game_lua_kernel::intf_shroud_op, true  >                 },
 		{ "remove_shroud",             &dispatch2<&game_lua_kernel::intf_shroud_op, false >                 },
@@ -4314,6 +4142,9 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 
 	// Create the unit_types table
 	cmd_log_ << lua_unit_type::register_table(L);
+
+	// Create the unit_types table
+	cmd_log_ << lua_terrainmap::register_metatables(L, false);
 
 	// Create the ai elements table.
 	cmd_log_ << "Adding ai elements table...\n";
@@ -4478,8 +4309,6 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 	lua_getglobal(L, "wesnoth");
 	lua_newtable(L);
 	lua_setfield(L, -2, "game_events");
-	push_locations_table(L);
-	lua_setfield(L, -2, "special_locations");
 	lua_pop(L, 1);
 
 	// Create the theme_items table.

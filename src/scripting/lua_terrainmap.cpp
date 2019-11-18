@@ -22,6 +22,9 @@
 #include "scripting/lua_common.hpp"
 #include "scripting/push_check.hpp"
 #include "scripting/game_lua_kernel.hpp"
+#include "resources.hpp"
+#include "game_board.hpp"
+#include "play_controller.hpp"
 
 #include "lua/lauxlib.h"
 #include "lua/lua.h"
@@ -30,77 +33,22 @@ static lg::log_domain log_scripting_lua("scripting/lua");
 #define LOG_LUA LOG_STREAM(info, log_scripting_lua)
 #define ERR_LUA LOG_STREAM(err, log_scripting_lua)
 
-static const char terrinmapKey[] = "terrainmap";
-static const char maplocationKey[] = "special_locations";
+static const char terrainmapKey[] = "terrain map";
+static const char terraincolKey[] = "terrain map column";
+static const char maplocationKey[] = "special locations";
 
 using std::string_view;
 
 ////////  SPECIAL LOCATION  ////////
 
-bool luaW_isslocs(lua_State* L, int index)
-{
-	return luaL_testudata(L, index, maplocationKey) != nullptr;
-}
-
-
-mapgen_gamemap* luaW_toslocs(lua_State *L, int index)
-{
-	if(!lua_istable(L, index)) {
-		return nullptr;
-	}
-
-	lua_rawgeti(L, index, 1);
-	mapgen_gamemap* m = luaW_toterrainmap(L, -1);
-	lua_pop(L, 1);
-	return m;
-}
-
-mapgen_gamemap& luaW_check_slocs(lua_State *L, int index)
-{
-	if(mapgen_gamemap* m = luaW_toslocs(L, index)) {
-		return *m;
-	}
-	luaW_type_error(L, index, "terrainmap");
-	throw "luaW_type_error didn't thow.";
-}
-
-void lua_slocs_setmetatable(lua_State *L)
-{
-	luaL_setmetatable(L, maplocationKey);
-}
-/**
-  * @a index the index of the map object.
-  */
-void luaW_pushslocs(lua_State *L, int index)
-{
-	lua_pushvalue(L, index);
-	//stack: map
-	lua_createtable(L, 1, 0);
-	//stack: map, slocs
-	lua_pushvalue(L, -2);
-	//stack: map, slocs, map
-	lua_rawseti(L, -2, 1);
-	//stack: map, slocs
-	luaL_setmetatable(L, maplocationKey);
-	//stack: map, slocs
-	lua_remove(L, -2);
-	//stack: slocs
-}
-
 int impl_slocs_get(lua_State* L)
 {
-	//todo: calling map.special_locations[1] will return the underlying map
-	//      object instead of the first starting position, because the lua
-	//      special locations is actually a table with the map object at
-	//      index 1. The probably easiest way to fix this inconsitency is
-	//      to just disallow all integerindicies here.
-	mapgen_gamemap& m = luaW_check_slocs(L, 1);
+	gamemap_base& m = luaW_checkterrainmap(L, 1);
 	string_view id = luaL_checkstring(L, 2);
 	auto res = m.special_location(std::string(id));
-	if(res.wml_x() >= 0) {
+	if(res.valid()) {
 		luaW_pushlocation(L, res);
-	}
-	else {
+	} else {
 		//functions with variable return numbers have been causing problem in the past
 		lua_pushnil(L);
 	}
@@ -109,7 +57,7 @@ int impl_slocs_get(lua_State* L)
 
 int impl_slocs_set(lua_State* L)
 {
-	mapgen_gamemap& m = luaW_check_slocs(L, 1);
+	gamemap_base& m = luaW_checkterrainmap(L, 1);
 	string_view id = luaL_checkstring(L, 2);
 	map_location loc = luaW_checklocation(L, 3);
 
@@ -117,114 +65,145 @@ int impl_slocs_set(lua_State* L)
 	return 0;
 }
 
+int impl_slocs_len(lua_State *L)
+{
+	gamemap_base& m = luaW_checkterrainmap(L, 1);
+	lua_pushnumber(L, m.special_locations().size());
+	return 1;
+}
+
+int impl_slocs_next(lua_State *L)
+{
+	gamemap_base& m = luaW_checkterrainmap(L, lua_upvalueindex(1));
+	const t_translation::starting_positions::left_map& left = m.special_locations().left;
+
+	t_translation::starting_positions::left_const_iterator it;
+	if (lua_isnoneornil(L, 2)) {
+		it = left.begin();
+	}
+	else {
+		it = left.find(luaL_checkstring(L, 2));
+		if (it == left.end()) {
+			return 0;
+		}
+		++it;
+	}
+	if (it == left.end()) {
+		return 0;
+	}
+	lua_pushstring(L, it->first.c_str());
+	luaW_pushlocation(L, it->second);
+	return 2;
+}
+
+int impl_slocs_iter(lua_State *L)
+{
+	lua_settop(L, 1);
+	lua_pushvalue(L, 1);
+	lua_pushcclosure(L, &impl_slocs_next, 1);
+	lua_pushvalue(L, 1);
+	lua_pushnil(L);
+	return 3;
+}
+
 ////////  MAP  ////////
 
 mapgen_gamemap::mapgen_gamemap(std::string_view s)
-	: tiles_()
-	, starting_positions_()
 {
 	if(s.empty()) {
 		return;
 	}
 	//throws t_translation::error
 	//todo: make read_game_map take a string_view
-	tiles_ = t_translation::read_game_map(s, starting_positions_, t_translation::coordinate{ 1, 1 });
+	tiles() = t_translation::read_game_map(s, special_locations(), t_translation::coordinate{ 1, 1 });
 }
 
 mapgen_gamemap::mapgen_gamemap(int w, int h, terrain_code t)
-	: tiles_(w, h, t)
-	, starting_positions_()
+	: gamemap_base(w, h, t)
 {
 
 }
 
-std::string mapgen_gamemap::to_string() const
+// This can produce invalid combinations in rare case
+// where an overlay doesn't have an independent terrain definition,
+// or if you set an overlay with no base and merge mode other than OVERLAY.
+void simplemerge(t_translation::terrain_code old_t, t_translation::terrain_code& new_t, const terrain_type_data::merge_mode mode)
 {
-	return t_translation::write_game_map(tiles_, starting_positions_, { 1, 1 }) + "\n";
+	switch(mode) {
+		case terrain_type_data::OVERLAY:
+			new_t = t_translation::terrain_code(old_t.base, new_t.overlay);
+			break;
+		case terrain_type_data::BASE:
+			new_t = t_translation::terrain_code(new_t.base, old_t.overlay);
+			break;
+		case terrain_type_data::BOTH:
+			new_t = t_translation::terrain_code(new_t.base, new_t.overlay);
+			break;
+	}
 }
 
-void mapgen_gamemap::set_terrain(const map_location& loc, const terrain_code & terrain, const terrain_type_data::merge_mode mode)
+void mapgen_gamemap::set_terrain(const map_location& loc, const terrain_code & terrain, const terrain_type_data::merge_mode mode, bool)
 {
-	terrain_code& t = (*this)[loc];
-	terrain_code old = t;
-	t = terrain;
+	terrain_code old = get_terrain(loc);
+	terrain_code t = terrain;
 	simplemerge(old, t, mode);
-
+	tiles().get(loc.x + border_size(), loc.y + border_size()) = t;
 }
 
-void mapgen_gamemap::simplemerge(terrain_code old_t, terrain_code& new_t, const terrain_type_data::merge_mode mode)
-{
-	if(mode == terrain_type_data::OVERLAY) {
-		new_t = t_translation::terrain_code(old_t.base, new_t.overlay);
-	}
-	if(mode == terrain_type_data::BASE) {
-		new_t = t_translation::terrain_code(new_t.base, old_t.overlay);
-	}
-}
+struct lua_map_ref {
+	virtual gamemap_base& get_map() = 0;
+	virtual ~lua_map_ref() {}
+};
 
-void mapgen_gamemap::set_special_location(const std::string& id, const map_location& loc)
-{
-	bool valid = loc.valid();
-	auto it_left = starting_positions_.left.find(id);
-	if (it_left != starting_positions_.left.end()) {
-		if (valid) {
-			starting_positions_.left.replace_data(it_left, loc);
-		}
-		else {
-			starting_positions_.left.erase(it_left);
-		}
+// Mapgen map reference, owned by Lua
+struct lua_map_ref_gen : public lua_map_ref {
+	mapgen_gamemap map;
+	template<typename... T>
+	lua_map_ref_gen(T&&... params) : map(std::forward<T>(params)...) {}
+	gamemap_base& get_map() override {
+		return map;
 	}
-	else {
-		starting_positions_.left.insert(it_left, std::pair(id, loc));
-	}
-}
+};
 
-map_location mapgen_gamemap::special_location(const std::string& id) const
-{
-	auto it = starting_positions_.left.find(id);
-	if (it != starting_positions_.left.end()) {
-		auto& coordinate = it->second;
-		return map_location(coordinate.x, coordinate.y);
+// Main map reference, owned by the engine
+struct lua_map_ref_main : public lua_map_ref {
+	gamemap& map;
+	lua_map_ref_main(gamemap& ref) : map(ref) {}
+	gamemap_base& get_map() override {
+		return map;
 	}
-	else {
-		return map_location();
+};
+
+// Non-owning map reference to either type (used for special location userdata)
+struct lua_map_ref_locs : public lua_map_ref {
+	gamemap_base& map;
+	lua_map_ref_locs(gamemap_base& ref) : map(ref) {}
+	gamemap_base& get_map() override {
+		return map;
 	}
-}
+};
 
 bool luaW_isterrainmap(lua_State* L, int index)
 {
-	return luaL_testudata(L, index, terrinmapKey) != nullptr;
+	return luaL_testudata(L, index, terrainmapKey) != nullptr || luaL_testudata(L, index, maplocationKey) != nullptr;
 }
 
 
-mapgen_gamemap* luaW_toterrainmap(lua_State *L, int index)
+gamemap_base* luaW_toterrainmap(lua_State *L, int index)
 {
 	if(luaW_isterrainmap(L, index)) {
-		return static_cast<mapgen_gamemap*>(lua_touserdata(L, index));
+		return &static_cast<lua_map_ref*>(lua_touserdata(L, index))->get_map();
 	}
 	return nullptr;
 }
 
-mapgen_gamemap& luaW_checkterrainmap(lua_State *L, int index)
+gamemap_base& luaW_checkterrainmap(lua_State *L, int index)
 {
 	if(luaW_isterrainmap(L, index)) {
-		return *static_cast<mapgen_gamemap*>(lua_touserdata(L, index));
+		return static_cast<lua_map_ref*>(lua_touserdata(L, index))->get_map();
 	}
 	luaW_type_error(L, index, "terrainmap");
 	throw "luaW_type_error didn't throw";
-}
-
-void lua_terrainmap_setmetatable(lua_State *L)
-{
-	luaL_setmetatable(L, terrinmapKey);
-}
-
-template<typename... T>
-mapgen_gamemap* luaW_pushmap(lua_State *L, T&&... params)
-{
-	mapgen_gamemap* res = new(L) mapgen_gamemap(std::forward<T>(params)...);
-	lua_terrainmap_setmetatable(L);
-	return res;
 }
 
 /**
@@ -241,14 +220,20 @@ int intf_terrainmap_create(lua_State *L)
 		int w = lua_tonumber(L, 1);
 		int h = lua_tonumber(L, 2);
 		auto terrain = t_translation::read_terrain_code(luaL_checkstring(L, 3));
-		luaW_pushmap(L, w, h, terrain);
-		return 1;
-	}
-	else {
+		new(L) lua_map_ref_gen(w, h, terrain);
+	} else {
 		string_view data_str = luaL_checkstring(L, 1);
-		luaW_pushmap(L, data_str);
-		return 1;
+		new(L) lua_map_ref_gen(data_str);
 	}
+	luaL_setmetatable(L, terrainmapKey);
+	return 1;
+}
+
+int intf_terrainmap_get(lua_State* L)
+{
+	new(L) lua_map_ref_main(const_cast<gamemap&>(resources::gameboard->map()));
+	luaL_setmetatable(L, terrainmapKey);
+	return 1;
 }
 
 /**
@@ -256,8 +241,50 @@ int intf_terrainmap_create(lua_State *L)
  */
 static int impl_terrainmap_collect(lua_State *L)
 {
-	mapgen_gamemap *u = static_cast<mapgen_gamemap*>(lua_touserdata(L, 1));
-	u->mapgen_gamemap::~mapgen_gamemap();
+	lua_map_ref* m = static_cast<lua_map_ref*>(lua_touserdata(L, 1));
+	m->lua_map_ref::~lua_map_ref();
+	return 0;
+}
+
+static void luaW_push_terrain(lua_State* L, gamemap_base& map, map_location loc)
+{
+	auto t = map.get_terrain(loc);
+	lua_pushstring(L, t_translation::write_terrain_code(t).c_str());
+}
+
+static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_location loc)
+{
+	auto mode = terrain_type_data::BOTH;
+	string_view t_str = luaL_checkstring(L, idx);
+	auto ter = t_translation::read_terrain_code(t_str);
+	if(ter.base == t_translation::NO_LAYER && ter.overlay != t_translation::NO_LAYER)
+		mode = terrain_type_data::OVERLAY;
+	map.set_terrain(loc, ter, mode);
+}
+
+static int impl_terrainmap_colget(lua_State* L)
+{
+	if(lua_istable(L, 1)) {
+		int x = luaW_table_get_def(L, 1, "col", 0);
+		if(luaW_tableget(L, 1, "map")) {
+			gamemap_base& map = luaW_checkterrainmap(L, -1);
+			int y = luaL_checkinteger(L, 2);
+			luaW_push_terrain(L, map, {x, y, wml_loc()});
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static int impl_terrainmap_colset(lua_State* L) {
+	if(lua_istable(L, 1)) {
+		int x = luaW_table_get_def(L, 1, "col", 0);
+		if(luaW_tableget(L, 1, "map")) {
+			gamemap_base& map = luaW_checkterrainmap(L, -1);
+			int y = luaL_checkinteger(L, 2);
+			impl_merge_terrain(L, 3, map, {x, y, wml_loc()});
+		}
+	}
 	return 0;
 }
 
@@ -269,7 +296,21 @@ static int impl_terrainmap_collect(lua_State *L)
  */
 static int impl_terrainmap_get(lua_State *L)
 {
-	mapgen_gamemap& tm = luaW_checkterrainmap(L, 1);
+	gamemap_base& tm = luaW_checkterrainmap(L, 1);
+	map_location loc;
+	if(lua_type(L, 2) == LUA_TNUMBER) {
+		lua_createtable(L, 0, 2);
+		lua_pushvalue(L, 1);
+		lua_setfield(L, -2, "map");
+		lua_pushvalue(L, 2);
+		lua_setfield(L, -2, "col");
+		luaL_setmetatable(L, terraincolKey);
+		return 1;
+	} else if(luaW_tolocation(L, 2, loc)) {
+		luaW_push_terrain(L, tm, loc);
+		return 1;
+	}
+	
 	char const *m = luaL_checkstring(L, 2);
 
 	// Find the corresponding attribute.
@@ -278,7 +319,8 @@ static int impl_terrainmap_get(lua_State *L)
 	return_string_attrib("data", tm.to_string());
 
 	if(strcmp(m, "special_locations") == 0) {
-		luaW_pushslocs(L, 1);
+		new(L) lua_map_ref_locs(tm);
+		luaL_setmetatable(L, maplocationKey);
 		return 1;
 	}
 	if(luaW_getmetafield(L, 1, m)) {
@@ -295,8 +337,12 @@ static int impl_terrainmap_get(lua_State *L)
  */
 static int impl_terrainmap_set(lua_State *L)
 {
-	mapgen_gamemap& tm = luaW_checkterrainmap(L, 1);
-	UNUSED(tm);
+	gamemap_base& tm = luaW_checkterrainmap(L, 1);
+	map_location loc;
+	if(luaW_tolocation(L, 2, loc)) {
+		impl_merge_terrain(L, 3, tm, loc);
+		return 0;
+	}
 	char const *m = luaL_checkstring(L, 2);
 	std::string err_msg = "unknown modifiable property of map: ";
 	err_msg += m;
@@ -312,7 +358,7 @@ static int impl_terrainmap_set(lua_State *L)
 */
 static int intf_set_terrain(lua_State *L)
 {
-	mapgen_gamemap& tm = luaW_checkterrainmap(L, 1);
+	gamemap_base& tm = luaW_checkterrainmap(L, 1);
 	map_location loc = luaW_checklocation(L, 2);
 	string_view t_str = luaL_checkstring(L, 3);
 
@@ -340,11 +386,10 @@ static int intf_set_terrain(lua_State *L)
  */
 static int intf_get_terrain(lua_State *L)
 {
-	mapgen_gamemap& tm = luaW_checkterrainmap(L, 1);
+	gamemap_base& tm = luaW_checkterrainmap(L, 1);
 	map_location loc = luaW_checklocation(L, 2);
 
-	auto t = tm[loc];
-	lua_pushstring(L, t_translation::write_terrain_code(t).c_str());
+	luaW_push_terrain(L, tm, loc);
 	return 1;
 }
 
@@ -363,6 +408,7 @@ static std::vector<gamemap::overlay_rule> read_rules_vector(lua_State *L, int in
 			rule.old_ = t_translation::read_list(luaW_tostring(L, -1));
 			lua_pop(L, 1);
 		}
+
 		if(luaW_tableget(L, -1, "new")) {
 			rule.new_ = t_translation::read_list(luaW_tostring(L, -1));
 			lua_pop(L, 1);
@@ -397,27 +443,26 @@ static std::vector<gamemap::overlay_rule> read_rules_vector(lua_State *L, int in
 	return rules;
 }
 /**
- * Reaplces part of the map.
+ * Replaces part of the map.
  * - Arg 1: map location.
  * - Arg 2: map data string.
  * - Arg 3: table for optional named arguments
- *   - is_odd: boolen, if Arg2 has the odd mapo format (as if it was cut from a odd map location)
+ *   - is_odd: boolean, if Arg2 has the odd map format (as if it was cut from a odd map location)
  *   - ignore_special_locations: boolean
  *   - rules: table of tables
 */
-int mapgen_gamemap::intf_mg_terrain_mask(lua_State *L)
+int intf_terrain_mask(lua_State *L)
 {
-	mapgen_gamemap& tm1 = luaW_checkterrainmap(L, 1);
+	gamemap_base& map = luaW_checkterrainmap(L, 1);
 	map_location loc = luaW_checklocation(L, 2);
-	mapgen_gamemap& tm2 = luaW_checkterrainmap(L, 3);
 
 	bool is_odd = false;
 	bool ignore_special_locations = false;
 	std::vector<gamemap::overlay_rule> rules;
 
 	if(lua_istable(L, 4)) {
-		is_odd = luaW_table_get_def<bool>(L, 4, "is_odd", false);
-		ignore_special_locations = luaW_table_get_def<bool>(L, 4, "ignore_special_locations", false);
+		is_odd = luaW_table_get_def(L, 4, "is_odd", false);
+		ignore_special_locations = luaW_table_get_def(L, 4, "ignore_special_locations", false);
 
 		if(luaW_tableget(L, 4, "rules")) {
 			if(!lua_istable(L, -1)) {
@@ -427,58 +472,88 @@ int mapgen_gamemap::intf_mg_terrain_mask(lua_State *L)
 			lua_pop(L, 1);
 		}
 	}
+	
+	if(lua_isstring(L, 3)) {
+		const std::string t_str = luaL_checkstring(L, 2);
+		std::unique_ptr<gamemap_base> mask;
+		if(auto gmap = dynamic_cast<gamemap*>(&map)) {
+			auto mask_ptr = new gamemap("");
+			mask_ptr->read(t_str, false);
+			mask.reset(mask_ptr);
+		} else {
+			mask.reset(new mapgen_gamemap(t_str));
+		}
+		map.overlay(*mask, loc, rules, is_odd, ignore_special_locations);
+		
+		if(resources::gameboard) {
+			if(auto gmap = dynamic_cast<gamemap*>(&map)) {
+				for(team& t : resources::gameboard->teams()) {
+					t.fix_villages(*gmap);
+				}
+			}
+		}
 
-	gamemap::overlay_impl(
-		tm1.tiles_,
-		tm1.starting_positions_,
-		tm2.tiles_,
-		tm2.starting_positions_,
-		[&](const map_location& loc, const t_translation::terrain_code& t, terrain_type_data::merge_mode mode, bool) { tm1.set_terrain(loc, t, mode); },
-		loc,
-		rules,
-		is_odd,
-		ignore_special_locations
-	);
+		if(resources::controller) {
+			resources::controller->get_display().needs_rebuild(true);
+		}
+	} else {
+		gamemap_base& mask = luaW_checkterrainmap(L, 3);
+		map.overlay(mask, loc, rules, is_odd, ignore_special_locations);
+	}
 
 	return 0;
 }
 
 namespace lua_terrainmap {
-	std::string register_metatables(lua_State* L)
+	std::string register_metatables(lua_State* L, bool use_tf)
 	{
 		std::ostringstream cmd_out;
 
-		cmd_out << "Adding terrainmamap metatable...\n";
+		cmd_out << "Adding terrain map metatable...\n";
 
-		luaL_newmetatable(L, terrinmapKey);
+		luaL_newmetatable(L, terrainmapKey);
 		lua_pushcfunction(L, impl_terrainmap_collect);
 		lua_setfield(L, -2, "__gc");
 		lua_pushcfunction(L, impl_terrainmap_get);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, impl_terrainmap_set);
 		lua_setfield(L, -2, "__newindex");
-		lua_pushstring(L, "terrainmap");
+		lua_pushstring(L, terrainmapKey);
 		lua_setfield(L, -2, "__metatable");
 		// terrainmap methods
 		lua_pushcfunction(L, intf_set_terrain);
 		lua_setfield(L, -2, "set_terrain");
 		lua_pushcfunction(L, intf_get_terrain);
 		lua_setfield(L, -2, "get_terrain");
-		lua_pushcfunction(L, intf_mg_get_locations);
-		lua_setfield(L, -2, "get_locations");
-		lua_pushcfunction(L, intf_mg_get_tiles_radius);
-		lua_setfield(L, -2, "get_tiles_radius");
-		lua_pushcfunction(L, &mapgen_gamemap::intf_mg_terrain_mask);
+		if(use_tf) {
+			lua_pushcfunction(L, intf_mg_get_locations);
+			lua_setfield(L, -2, "get_locations");
+			lua_pushcfunction(L, intf_mg_get_tiles_radius);
+			lua_setfield(L, -2, "get_tiles_radius");
+		}
+		lua_pushcfunction(L, intf_terrain_mask);
 		lua_setfield(L, -2, "terrain_mask");
+		
+		luaL_newmetatable(L, terraincolKey);
+		lua_pushcfunction(L, impl_terrainmap_colget);
+		lua_setfield(L, -2, "__index");
+		lua_pushcfunction(L, impl_terrainmap_colset);
+		lua_setfield(L, -2, "__newindex");
+		lua_pushstring(L, terraincolKey);
+		lua_setfield(L, -2, "__metatable");
 
-		cmd_out << "Adding terrainmamap2 metatable...\n";
+		cmd_out << "Adding special locations metatable...\n";
 
 		luaL_newmetatable(L, maplocationKey);
 		lua_pushcfunction(L, impl_slocs_get);
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, impl_slocs_set);
 		lua_setfield(L, -2, "__newindex");
-		lua_pushstring(L, "special_locations");
+		lua_pushcfunction(L, impl_slocs_len);
+		lua_setfield(L, -2, "__len");
+		lua_pushcfunction(L, impl_slocs_iter);
+		lua_setfield(L, -2, "__pairs");
+		lua_pushstring(L, maplocationKey);
 		lua_setfield(L, -2, "__metatable");
 
 		return cmd_out.str();

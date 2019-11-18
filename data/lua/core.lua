@@ -635,6 +635,23 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 		if type(side) == 'number' then side = wesnoth.sides[side] end
 		return side.starting_location
 	end
+
+	--[========[Map module]========]
+	
+	local get_map = wesnoth.get_map
+	
+	-- Deprecated function
+	function wesnoth.terrain_mask(...)
+		get_map().terrain_mask(...)
+	end
+	
+	-- Again deprecated
+	wesnoth.special_locations = setmetatable({}, {
+		__index = function(_, k) return get_map().special_locations[k] end,
+		__newindex = function(_, k, v) get_map().special_locations[k] = v end,
+		__len = function(_) return #get_map().special_locations end,
+		__pairs = function(_) return pairs(get_map().special_locations) end,
+	})
 else
 	--[========[Backwards compatibility for wml.tovconfig]========]
 	local fake_vconfig_mt = {
