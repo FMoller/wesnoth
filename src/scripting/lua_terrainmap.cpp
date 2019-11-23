@@ -259,7 +259,15 @@ static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_loc
 	auto ter = t_translation::read_terrain_code(t_str);
 	if(ter.base == t_translation::NO_LAYER && ter.overlay != t_translation::NO_LAYER)
 		mode = terrain_type_data::OVERLAY;
-	map.set_terrain(loc, ter, mode);
+	if(auto gm = dynamic_cast<gamemap*>(&map)) {
+		if(resources::gameboard) {
+			bool result = resources::gameboard->change_terrain(loc, ter, mode, true);
+
+			if(resources::controller) {
+				resources::controller->get_display().needs_rebuild(result);
+			}
+		}
+	} else map.set_terrain(loc, ter, mode);
 }
 
 static int impl_terrainmap_colget(lua_State* L)
@@ -375,7 +383,15 @@ static int intf_set_terrain(lua_State *L)
 		}
 	}
 
-	tm.set_terrain(loc, terrain, mode);
+	if(auto gm = dynamic_cast<gamemap*>(&tm)) {
+		if(resources::gameboard) {
+			bool result = resources::gameboard->change_terrain(loc, terrain, mode, true);
+
+			if(resources::controller) {
+				resources::controller->get_display().needs_rebuild(result);
+			}
+		}
+	} else tm.set_terrain(loc, terrain, mode);
 	return 0;
 }
 
