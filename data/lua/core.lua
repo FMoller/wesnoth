@@ -982,3 +982,4 @@ wesnoth.random = wesnoth.deprecate_api('wesnoth.random', 'mathx.random', 1, nil,
 wesnoth.get_time_stamp = wesnoth.deprecate_api('wesnoth.get_time_stamp', 'mathx.current_timestamp', 1, nil, mathx.current_timestamp)
 -- Other
 unpack = wesnoth.deprecate_api('unpack', 'table.unpack', 3, '1.17', table.unpack)
+wesnoth.compare_versions = wesnoth.deprecate_api('wesnoth.compare_versions', 'versions.compare', 1, nil, versions.compare)
