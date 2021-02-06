@@ -240,7 +240,7 @@ std::unique_ptr<wesnothd_connection> mp_manager::open_connection(std::string hos
 	gui2::dialogs::loading_screen::progress(loading_stage::connect_to_server);
 
 	// Initializes the connection to the server.
-	auto conn = std::make_unique<wesnothd_connection>(addr->first, addr->second);
+	auto conn = std::make_unique<wesnothd_connection>(addr->first, addr->second, true);
 
 	// First, spin until we get a handshake from the server.
 	conn->wait_for_handshake();
@@ -288,7 +288,7 @@ std::unique_ptr<wesnothd_connection> mp_manager::open_connection(std::string hos
 
 			// Open a new connection with the new host and port.
 			conn.reset();
-			conn = std::make_unique<wesnothd_connection>(redirect_host, redirect_port);
+			conn = std::make_unique<wesnothd_connection>(redirect_host, redirect_port, true);
 
 			// Wait for new handshake.
 			conn->wait_for_handshake();
