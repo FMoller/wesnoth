@@ -203,12 +203,11 @@ gamemap_base& luaW_checkterrainmap(lua_State *L, int index)
 		return static_cast<lua_map_ref*>(lua_touserdata(L, index))->get_map();
 	}
 	luaW_type_error(L, index, "terrainmap");
-	throw "luaW_type_error didn't throw";
 }
 
 /**
  * Create a map.
- * - Arg 1: string descripbing the map data.
+ * - Arg 1: string describing the map data.
  * - or:
  * - Arg 1: int, width
  * - Arg 2: int, height
