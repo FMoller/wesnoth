@@ -970,6 +970,7 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 	wesnoth.set_music = wesnoth.deprecate_api('wesnoth.set_music', 'wesnoth.audio.music_list', 1, nil, function(cfg)
 		wesnoth.wml_actions.music(cfg)
 	end)
+	wesnoth.open_help = wesnoth.deprecate_api('wesnoth.open_help', 'gui.open_help', 1, nil, gui.open_help)
 end
 wesnoth.tovconfig = wesnoth.deprecate_api('wesnoth.tovconfig', 'wml.tovconfig', 1, nil, wml.tovconfig)
 wesnoth.debug = wesnoth.deprecate_api('wesnoth.debug', 'wml.tostring', 1, nil, wml.tostring)
