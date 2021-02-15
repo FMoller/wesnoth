@@ -262,6 +262,9 @@ static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_loc
 	if(auto gm = dynamic_cast<gamemap*>(&map)) {
 		if(resources::gameboard) {
 			bool result = resources::gameboard->change_terrain(loc, ter, mode, true);
+			for(team& t : resources::gameboard->teams()) {
+				t.fix_villages(*gm);
+			}
 
 			if(resources::controller) {
 				resources::controller->get_display().needs_rebuild(result);
@@ -386,6 +389,10 @@ static int intf_set_terrain(lua_State *L)
 	if(auto gm = dynamic_cast<gamemap*>(&tm)) {
 		if(resources::gameboard) {
 			bool result = resources::gameboard->change_terrain(loc, terrain, mode, true);
+			
+			for(team& t : resources::gameboard->teams()) {
+				t.fix_villages(*gm);
+			}
 
 			if(resources::controller) {
 				resources::controller->get_display().needs_rebuild(result);
@@ -500,21 +507,21 @@ int intf_terrain_mask(lua_State *L)
 			mask.reset(new mapgen_gamemap(t_str));
 		}
 		map.overlay(*mask, loc, rules, is_odd, ignore_special_locations);
-		
-		if(resources::gameboard) {
-			if(auto gmap = dynamic_cast<gamemap*>(&map)) {
-				for(team& t : resources::gameboard->teams()) {
-					t.fix_villages(*gmap);
-				}
-			}
-		}
-
-		if(resources::controller) {
-			resources::controller->get_display().needs_rebuild(true);
-		}
 	} else {
 		gamemap_base& mask = luaW_checkterrainmap(L, 3);
 		map.overlay(mask, loc, rules, is_odd, ignore_special_locations);
+	}
+	
+	if(resources::gameboard) {
+		if(auto gmap = dynamic_cast<gamemap*>(&map)) {
+			for(team& t : resources::gameboard->teams()) {
+				t.fix_villages(*gmap);
+			}
+		}
+	}
+
+	if(resources::controller) {
+		resources::controller->get_display().needs_rebuild(true);
 	}
 
 	return 0;
