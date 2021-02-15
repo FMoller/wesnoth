@@ -943,6 +943,8 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 	wesnoth.delete_ai_component = wesnoth.deprecate_api('wesnoth.delete_ai_component', 'wesnoth.sides.delete_ai_component', 1, nil, wesnoth.sides.delete_ai_component)
 	wesnoth.change_ai_component = wesnoth.deprecate_api('wesnoth.change_ai_component', 'wesnoth.sides.change_ai_component', 1, nil, wesnoth.sides.change_ai_component)
 	wesnoth.get_sides = wesnoth.deprecate_api('wesnoth.get_sides', 'wesnoth.sides.find', 1, nil, wesnoth.sides.find)
+	wesnoth.create_animator = wesnoth.deprecate_api('wesnoth.create_animator', 'wesnoth.units.create_animator', 1, nil, wesnoth.units.create_animator)
+	wesnoth.create_weapon = wesnoth.deprecate_api('wesnoth.create_weapon', 'wesnoth.units.create_weapon', 1, nil, wesnoth.units.create_weapon)
 	-- Audio module
 	wesnoth.play_sound = wesnoth.deprecate_api('wesnoth.play_sound', 'wesnoth.audio.play', 1, nil, wesnoth.audio.play)
 	wesnoth.sound_volume = wesnoth.deprecate_api('wesnoth.sound_volume', 'wesnoth.audio.volume', 1, nil, function(volume)
