@@ -899,8 +899,9 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 	wesnoth.get_displayed_unit = wesnoth.deprecate_api('wesnoth.get_displayed_unit', 'wesnoth.interface.get_displayed_unit', 1, nil, wesnoth.interface.get_displayed_unit)
 	wesnoth.zoom = wesnoth.deprecate_api('wesnoth.zoom', 'wesnoth.interface.zoom', 1, nil, wesnoth.interface.zoom)
 	wesnoth.gamestate_inspector = wesnoth.deprecate_api('wesnoth.gamestate_inspector', 'gui.show_inspector', 1, nil, gui.show_inspector)
+	-- wesnoth.wml_actions.color_adjust doesn't exist yet at this point, so create a helper function instead.
+	wesnoth.color_adjust = deprecate_api('wesnoth.color_adjust', 'wesnoth.interface.color_adjust', 1, nil, wesnoth.wml_actions.color_adjust)
 	-- No deprecation for these since since they're not actually public API yet
-	wesnoth.color_adjust = wesnoth.interface.color_adjust
 	wesnoth.set_menu_item = wesnoth.interface.set_menu_item
 	wesnoth.clear_menu_item = wesnoth.interface.clear_menu_item
 	-- Units module
