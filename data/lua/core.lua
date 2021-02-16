@@ -876,6 +876,26 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 	wesnoth.set_music = wesnoth.deprecate_api('wesnoth.set_music', 'wesnoth.music_list', 1, nil, function(cfg)
 		wesnoth.wml_actions.music(cfg)
 	end)
+	-- Map module
+	wesnoth.place_shroud = wesnoth.deprecate_api('wesnoth.place_shroud', 'wesnoth.map.place_shroud', 1, nil, wesnoth.map.place_shroud)
+	wesnoth.remove_shroud = wesnoth.deprecate_api('wesnoth.remove_shroud', 'wesnoth.map.remove_shroud', 1, nil, wesnoth.map.remove_shroud)
+	wesnoth.is_shrouded = wesnoth.deprecate_api('wesnoth.is_shrouded', 'wesnoth.map.is_shrouded', 1, nil, wesnoth.map.is_shrouded)
+	wesnoth.add_fog = wesnoth.deprecate_api('wesnoth.add_fog', 'wesnoth.map.place_fog', 1, nil, wesnoth.map.place_fog)
+	wesnoth.remove_fog = wesnoth.deprecate_api('wesnoth.remove_fog', 'wesnoth.map.remove_fog', 1, nil, wesnoth.map.remove_fog)
+	wesnoth.is_fogged = wesnoth.deprecate_api('wesnoth.is_fogged', 'wesnoth.map.is_fogged', 1, nil, wesnoth.map.is_fogged)
+	wesnoth.get_village_owner = wesnoth.deprecate_api('wesnoth.get_village_owner', 'wesnoth.map.get_owner', 1, nil, wesnoth.map.get_owner)
+	wesnoth.set_village_owner = wesnoth.deprecate_api('wesnoth.set_village_owner', 'wesnoth.map.set_owner', 1, nil, wesnoth.map.set_owner)
+	wesnoth.label = wesnoth.deprecate_api('wesnoth.label', 'wesnoth.map.add_label', 1, nil, wesnoth.map.add_label)
+	wesnoth.add_time_area = wesnoth.deprecate_api('wesnoth.add_time_area', 'wesnoth.map.place_area', 1, nil, wesnoth.map.place_area)
+	wesnoth.remove_time_area = wesnoth.deprecate_api('wesnoth.remove_time_are', 'wesnoth.map.remove_area', 1, nil, wesnoth.map.remove_area)
+	wesnoth.get_locations = wesnoth.deprecate_api('wesnoth.get_locations', 'wesnoth.map.get_locations', 1, nil, wesnoth.map.get_locations)
+	wesnoth.get_villages = wesnoth.deprecate_api('wesnoth.get_locations', 'wesnoth.map.get_locations', 1, nil, function(cfg)
+		return wesnoth.map.get_locations{
+			gives_income = true,
+			wml.tag["and"](cfg)
+		}
+	end)
+	wesnoth.match_location = wesnoth.deprecate_api('wesnoth.match_location', 'wesnoth.map.match_location', 1, nil, wesnoth.map.match_location)
 end
 wesnoth.tovconfig = wesnoth.deprecate_api('wesnoth.tovconfig', 'wml.tovconfig', 1, nil, wml.tovconfig)
 wesnoth.debug = wesnoth.deprecate_api('wesnoth.debug', 'wml.tostring', 1, nil, wml.tostring)
