@@ -638,6 +638,121 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 
 	--[========[Map module]========]
 	
+	local hex_mt = {__metatable = 'terrain hex reference'}
+	
+	function hex_mt.__index(self, key)
+		if key == 'fogged' then
+			return self:fogged_for(wesnoth.current.side)
+		elseif key == 'shrouded' then
+			return self:shrouded_for(wesnoth.current.side)
+		elseif key == 'team_label' then
+			local label = self:label_for(wesnoth.current.side)
+			if label then return label.text end
+			return nil
+		elseif key == 'global_label' then
+			local label = self:label_for(nil)
+			if label then return label.text end
+			return nil
+		elseif key == 'label' then
+			return self.team_label or self.global_label
+		elseif key == 'terrain' then
+			return wesnoth.map.get()[self]
+		elseif key == 'base_terrain' then
+			return self.terrain:split('^')[1]
+		elseif key == 'overlay_terrain' then
+			return self.terrain:split('^', {remove_empty=false})[2]
+		elseif key == 'info' then
+			return wesnoth.get_terrain_info(wesnoth.map.get()[self])
+		elseif #key > 0 and key[0] ~= '_' then
+			return hex_mt[key]
+		end
+	end
+	
+	function hex_mt.__newindex(self, key, val)
+		if key == 'fogged' then
+			self:set_fogged(wesnoth.current.side, val)
+		elseif key == 'shrouded' then
+			self:set_shrouded(wesnoth.current.side, val)
+		elseif key == 'team_label' or key == 'global_label' or key == 'label' then
+			local cfg
+			if type(val) == 'string' or (type(val) == 'userdata' and getmetatable(val) == 'translatable string') then
+				cfg = {x = self.x, y = self.y, text = val}
+			else
+				cfg = wml.parsed(val)
+				cfg.x, cfg.y = self.x, self.y
+			end
+			if key == 'team_label' then
+				cfg.side = wesnoth.current.side
+				cfg.team_name = wesnoth.sides[wesnoth.current.side].team_name
+			elseif key == 'global_label' then
+				cfg.side = 0
+				cfg.team_name = nil
+			elseif cfg.side == nil and cfg.team_name == nil then
+				-- If side or team name explicitly specified, use that, otherwise use current side and no team
+				cfg.side = wesnoth.current.side
+				cfg.team_name = nil
+			end
+			wesnoth.map.add_label(cfg)
+		elseif key == 'terrain' then
+			wesnoth.map.get()[self] = val
+		elseif key == 'base_terrain' then
+			wesnoth.map.get():set_terrain(self, val, 'base')
+		elseif key == 'overlay_terrain' then
+			-- If set to nil, clear the overlay
+			val = val or ''
+			-- Unless clearing the overlay, we definitely want an overlay terrain, so it needs to start with ^
+			if #val > 0 and val[1] ~= '^' then val = '^' + val end
+			wesnoth.map.get():set_terrain(self, val, 'overlay')
+		elseif key == 'info' then
+			error('hex.info is read-only', 1)
+		end
+	end
+	
+	function hex_mt:fogged_for(side)
+		return wesnoth.map.is_fogged(side, self.x, self.y)
+	end
+	
+	function hex_mt:shrouded_for(side)
+		return wesnoth.map.is_shrouded(side, self.x, self.y)
+	end
+	
+	function hex_mt:set_fogged(side, val)
+		if val then
+			wesnoth.map.place_shroud(side, {val})
+		else
+			wesnoth.map.remove_shroud(side, {val})
+		end
+	end
+	
+	function hex_mt:set_fogged(side, val)
+		if val then
+			wesnoth.map.place_fog(side, {val})
+		else
+			wesnoth.map.remove_fog(side, {val})
+		end
+	end
+	
+	function hex_mt:label_for(who)
+		return wesnoth.map.get_label(self.x, self.y, who)
+	end
+	
+	function hex_mt:match(filter)
+		return wesnoth.map.matches_location(self.x, self.y, filter)
+	end
+	
+	function wesnoth.map.get_hex(x, y)
+		return setmetatable({x = x, y = y}, hex_mt)
+	end
+	
+	function wesnoth.map.get_hexes(cfg)
+		local hexes = wesnoth.map.get_locations(cfg)
+		for i = 1, #hexes do
+			hexes[i] = wesnoth.map.get_hex(hexes[i].x, hexes[i].y)
+		end
+		return hexes
+	end
+	
+	-- Deprecated stuff
 	local get_map = wesnoth.map.get
 	
 	wesnoth.terrain_mask = wesnoth.deprecate_api('wesnoth.terrain_mask', 'wesnoth.map.get():terrain_mask', 1, nil, function(...)
