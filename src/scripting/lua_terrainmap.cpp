@@ -37,6 +37,11 @@ static const char terrainmapKey[] = "terrain map";
 static const char terraincolKey[] = "terrain map column";
 static const char maplocationKey[] = "special locations";
 
+// Uservalue indices for the terrain map colum userdata
+namespace terraincol {
+	enum {MAP = 1, COL = 2};
+}
+
 using std::string_view;
 
 ////////  SPECIAL LOCATION  ////////
@@ -274,26 +279,26 @@ static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_loc
 
 static int impl_terrainmap_colget(lua_State* L)
 {
-	if(lua_istable(L, 1)) {
-		int x = luaW_table_get_def(L, 1, "col", 0);
-		if(luaW_tableget(L, 1, "map")) {
-			gamemap_base& map = luaW_checkterrainmap(L, -1);
-			int y = luaL_checkinteger(L, 2);
-			luaW_push_terrain(L, map, {x, y, wml_loc()});
-			return 1;
-		}
+	if(luaL_testudata(L, 1, terraincolKey)) {
+		lua_getiuservalue(L, 1, terraincol::MAP);
+		gamemap_base& map = luaW_checkterrainmap(L, -1);
+		lua_getiuservalue(L, 1, terraincol::COL);
+		int x = luaL_checkinteger(L, -1);
+		int y = luaL_checkinteger(L, 2);
+		luaW_push_terrain(L, map, {x, y, wml_loc()});
+		return 1;
 	}
 	return 0;
 }
 
 static int impl_terrainmap_colset(lua_State* L) {
-	if(lua_istable(L, 1)) {
-		int x = luaW_table_get_def(L, 1, "col", 0);
-		if(luaW_tableget(L, 1, "map")) {
-			gamemap_base& map = luaW_checkterrainmap(L, -1);
-			int y = luaL_checkinteger(L, 2);
-			impl_merge_terrain(L, 3, map, {x, y, wml_loc()});
-		}
+	if(luaL_testudata(L, 1, terraincolKey)) {
+		lua_getiuservalue(L, 1, terraincol::MAP);
+		gamemap_base& map = luaW_checkterrainmap(L, -1);
+		lua_getiuservalue(L, 1, terraincol::COL);
+		int x = luaL_checkinteger(L, -1);
+		int y = luaL_checkinteger(L, 2);
+		impl_merge_terrain(L, 3, map, {x, y, wml_loc()});
 	}
 	return 0;
 }
@@ -309,11 +314,11 @@ static int impl_terrainmap_get(lua_State *L)
 	gamemap_base& tm = luaW_checkterrainmap(L, 1);
 	map_location loc;
 	if(lua_type(L, 2) == LUA_TNUMBER) {
-		lua_createtable(L, 0, 2);
+		lua_newuserdatauv(L, 0, 2);
 		lua_pushvalue(L, 1);
-		lua_setfield(L, -2, "map");
+		lua_setiuservalue(L, -2, terraincol::MAP);
 		lua_pushvalue(L, 2);
-		lua_setfield(L, -2, "col");
+		lua_setiuservalue(L, -2, terraincol::COL);
 		luaL_setmetatable(L, terraincolKey);
 		return 1;
 	} else if(luaW_tolocation(L, 2, loc)) {
