@@ -864,54 +864,6 @@ int game_lua_kernel::intf_lock_view(lua_State *L)
 }
 
 /**
- * Gets a terrain code.
- * - Arg 1: map location.
- * - Ret 1: string.
- */
-int game_lua_kernel::intf_get_terrain(lua_State *L)
-{
-	map_location loc = luaW_checklocation(L, 1);
-
-	const t_translation::terrain_code& t = board().map().
-		get_terrain(loc);
-	lua_pushstring(L, t_translation::write_terrain_code(t).c_str());
-	return 1;
-}
-
-/**
- * Sets a terrain code.
- * - Arg 1: map location.
- * - Arg 2: terrain code string.
- * - Arg 3: layer: (overlay|base|both, default=both)
- * - Arg 4: replace_if_failed, default = no
- */
-int game_lua_kernel::intf_set_terrain(lua_State *L)
-{
-	map_location loc = luaW_checklocation(L, 1);
-	std::string t_str(luaL_checkstring(L, 2));
-
-	std::string mode_str = "both";
-	bool replace_if_failed = false;
-	if (!lua_isnone(L, 3)) {
-		if (!lua_isnil(L, 3)) {
-			mode_str = luaL_checkstring(L, 3);
-		}
-
-		if(!lua_isnoneornil(L, 4)) {
-			replace_if_failed = luaW_toboolean(L, 4);
-		}
-	}
-
-	bool result = board().change_terrain(loc, t_str, mode_str, replace_if_failed);
-
-	if (game_display_) {
-		game_display_->needs_rebuild(result);
-	}
-
-	return 0;
-}
-
-/**
  * Gets details about a terrain.
  * - Arg 1: terrain code string.
  * - Ret 1: table.
@@ -1098,22 +1050,6 @@ int game_lua_kernel::intf_set_village_owner(lua_State *L)
 	}
 
 	return 0;
-}
-
-
-/**
- * Returns the map size.
- * - Ret 1: width.
- * - Ret 2: height.
- * - Ret 3: border size.
- */
-int game_lua_kernel::intf_get_map_size(lua_State *L)
-{
-	const gamemap &map = board().map();
-	lua_pushinteger(L, map.w());
-	lua_pushinteger(L, map.h());
-	lua_pushinteger(L, map.border_size());
-	return 3;
 }
 
 /**
@@ -4033,7 +3969,6 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 		{ "add_known_unit",           &intf_add_known_unit           },
 		{ "create_animator",          &dispatch<&game_lua_kernel::intf_create_animator>          },
 		{ "eval_conditional",         &intf_eval_conditional         },
-		{ "get_map",                  &intf_terrainmap_get           },
 		{ "get_era",                  &intf_get_era                  },
 		{ "get_resource",             &intf_get_resource             },
 		{ "get_traits",               &intf_get_traits               },
@@ -4062,9 +3997,7 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 		{ "get_all_vars",              &dispatch<&game_lua_kernel::intf_get_all_vars               >        },
 		{ "get_end_level_data",        &dispatch<&game_lua_kernel::intf_get_end_level_data         >        },
 		{ "get_locations",             &dispatch<&game_lua_kernel::intf_get_locations              >        },
-		{ "get_map_size",              &dispatch<&game_lua_kernel::intf_get_map_size               >        },
 		{ "get_sound_source",          &dispatch<&game_lua_kernel::intf_get_sound_source           >        },
-		{ "get_terrain",               &dispatch<&game_lua_kernel::intf_get_terrain                >        },
 		{ "get_terrain_info",          &dispatch<&game_lua_kernel::intf_get_terrain_info           >        },
 		{ "get_time_of_day",           &dispatch<&game_lua_kernel::intf_get_time_of_day            >        },
 		{ "get_max_liminal_bonus",     &dispatch<&game_lua_kernel::intf_get_max_liminal_bonus      >        },
@@ -4093,7 +4026,6 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 		{ "set_end_campaign_text",     &dispatch<&game_lua_kernel::intf_set_end_campaign_text      >        },
 		{ "create_side",               &dispatch<&game_lua_kernel::intf_create_side                >        },
 		{ "set_next_scenario",         &dispatch<&game_lua_kernel::intf_set_next_scenario          >        },
-		{ "set_terrain",               &dispatch<&game_lua_kernel::intf_set_terrain                >        },
 		{ "set_variable",              &dispatch<&game_lua_kernel::intf_set_variable               >        },
 		{ "set_village_owner",         &dispatch<&game_lua_kernel::intf_set_village_owner          >        },
 		{ "simulate_combat",           &dispatch<&game_lua_kernel::intf_simulate_combat            >        },
@@ -4169,6 +4101,12 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 	lua_getglobal(L, "wml");
 	lua_pushcfunction(L, &lua_common::intf_tovconfig);
 	lua_setfield(L, -2, "tovconfig");
+	lua_pop(L, 1);
+	
+	// Add get to the map module
+	luaW_getglobal(L, "wesnoth", "map");
+	lua_pushcfunction(L, &intf_terrainmap_get);
+	lua_setfield(L, -2, "get");
 	lua_pop(L, 1);
 
 	// Create the units module

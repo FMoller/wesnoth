@@ -638,20 +638,28 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 
 	--[========[Map module]========]
 	
-	local get_map = wesnoth.get_map
+	local get_map = wesnoth.map.get
 	
-	-- Deprecated function
-	function wesnoth.terrain_mask(...)
+	wesnoth.terrain_mask = wesnoth.deprecate_api('wesnoth.terrain_mask', 'wesnoth.map.get():terrain_mask', 1, nil, function(...)
 		get_map().terrain_mask(...)
-	end
-	
-	-- Again deprecated
-	wesnoth.special_locations = setmetatable({}, {
+	end)
+	wesnoth.get_terrain = wesnoth.deprecate_api('wesnoth.get_terrain', 'wesnoth.map.get():get_terrain', 1, nil, function(...)
+		get_map().get_terrain(...)
+	end)
+	wesnoth.set_terrain = wesnoth.deprecate_api('wesnoth.set_terrain', 'wesnoth.map.get():set_terrain', 1, nil, function(...)
+		get_map().set_terrain(...)
+	end)
+	wesnoth.get_map_size = wesnoth.deprecate_api('wesnoth.get_map_size', 'wesnoth.map.get().width,height,border_size', 1, nil, function()
+		local m = get_map()
+		local border = m.border_size
+		return m.width - 2 * border, m.height - 2 * border, border
+	end, 'Note: width and height on map.get() return the size including the border, while get_map_size() returns the size excluding the border')
+	wesnoth.special_locations = wesnoth.deprecate_api('wesnoth.special_locations', 'wesnoth.map.get():special_locations', 1, nil, setmetatable({}, {
 		__index = function(_, k) return get_map().special_locations[k] end,
 		__newindex = function(_, k, v) get_map().special_locations[k] = v end,
 		__len = function(_) return #get_map().special_locations end,
 		__pairs = function(_) return pairs(get_map().special_locations) end,
-	})
+	}))
 else
 	--[========[Backwards compatibility for wml.tovconfig]========]
 	local fake_vconfig_mt = {

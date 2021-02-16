@@ -331,6 +331,7 @@ static int impl_terrainmap_get(lua_State *L)
 	// Find the corresponding attribute.
 	return_int_attrib("width", tm.total_width());
 	return_int_attrib("height", tm.total_height());
+	return_int_attrib("border_size", tm.border_size());
 	return_string_attrib("data", tm.to_string());
 
 	if(strcmp(m, "special_locations") == 0) {
