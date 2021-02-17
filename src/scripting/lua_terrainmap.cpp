@@ -371,6 +371,7 @@ static int impl_terrainmap_set(lua_State *L)
  * - Arg 1: map location.
  * - Arg 2: terrain code string.
  * - Arg 3: layer: (overlay|base|both, default=both)
+ * - Arg 4: replace_if_failed, default = no
 */
 static int intf_set_terrain(lua_State *L)
 {
@@ -380,6 +381,7 @@ static int intf_set_terrain(lua_State *L)
 
 	auto terrain = t_translation::read_terrain_code(t_str);
 	auto mode = terrain_type_data::BOTH;
+	bool replace_if_failed = false;
 
 	if(!lua_isnoneornil(L, 4)) {
 		string_view mode_str = luaL_checkstring(L, 4);
@@ -389,11 +391,15 @@ static int intf_set_terrain(lua_State *L)
 		else if(mode_str == "overlay") {
 			mode = terrain_type_data::OVERLAY;
 		}
+		
+		if(!lua_isnoneornil(L, 5)) {
+			replace_if_failed = luaW_toboolean(L, 5);
+		}
 	}
 
 	if(auto gm = dynamic_cast<gamemap*>(&tm)) {
 		if(resources::gameboard) {
-			bool result = resources::gameboard->change_terrain(loc, terrain, mode, true);
+			bool result = resources::gameboard->change_terrain(loc, terrain, mode, replace_if_failed);
 			
 			for(team& t : resources::gameboard->teams()) {
 				t.fix_villages(*gm);
