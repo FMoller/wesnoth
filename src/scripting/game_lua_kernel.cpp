@@ -4148,7 +4148,7 @@ game_lua_kernel::game_lua_kernel(game_state & gs, play_controller & pc, reports 
 		{"place_area", &dispatch<&game_lua_kernel::intf_add_time_area>},
 		{"remove_area", &dispatch<&game_lua_kernel::intf_remove_time_area>},
 		// Filters
-		{"get_locations", &dispatch<&game_lua_kernel::intf_get_locations>},
+		{"find_locations", &dispatch<&game_lua_kernel::intf_get_locations>},
 		{"match_location", &dispatch<&game_lua_kernel::intf_match_location>},
 		{ nullptr, nullptr }
 	};

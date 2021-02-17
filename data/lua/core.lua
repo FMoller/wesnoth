@@ -744,8 +744,8 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 		return setmetatable({x = x, y = y}, hex_mt)
 	end
 	
-	function wesnoth.map.get_hexes(cfg)
-		local hexes = wesnoth.map.get_locations(cfg)
+	function wesnoth.map.find_hexes(cfg)
+		local hexes = wesnoth.map.find_locations(cfg)
 		for i = 1, #hexes do
 			hexes[i] = wesnoth.map.get_hex(hexes[i].x, hexes[i].y)
 		end
@@ -1003,9 +1003,9 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 	wesnoth.label = wesnoth.deprecate_api('wesnoth.label', 'wesnoth.map.add_label', 1, nil, wesnoth.map.add_label)
 	wesnoth.add_time_area = wesnoth.deprecate_api('wesnoth.add_time_area', 'wesnoth.map.place_area', 1, nil, wesnoth.map.place_area)
 	wesnoth.remove_time_area = wesnoth.deprecate_api('wesnoth.remove_time_are', 'wesnoth.map.remove_area', 1, nil, wesnoth.map.remove_area)
-	wesnoth.get_locations = wesnoth.deprecate_api('wesnoth.get_locations', 'wesnoth.map.get_locations', 1, nil, wesnoth.map.get_locations)
-	wesnoth.get_villages = wesnoth.deprecate_api('wesnoth.get_locations', 'wesnoth.map.get_locations', 1, nil, function(cfg)
-		return wesnoth.map.get_locations{
+	wesnoth.get_locations = wesnoth.deprecate_api('wesnoth.get_locations', 'wesnoth.map.find_locations', 1, nil, wesnoth.map.find_locations)
+	wesnoth.get_villages = wesnoth.deprecate_api('wesnoth.get_locations', 'wesnoth.map.find_locations', 1, nil, function(cfg)
+		return wesnoth.map.find_locations{
 			gives_income = true,
 			wml.tag["and"](cfg)
 		}
