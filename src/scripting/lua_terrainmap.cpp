@@ -427,6 +427,16 @@ static int intf_get_terrain(lua_State *L)
 	return 1;
 }
 
+static int intf_on_board(lua_State* L)
+{
+	gamemap_base& tm = luaW_checkterrainmap(L, 1);
+	map_location loc = luaW_checklocation(L, 2);
+	bool with_border = luaL_opt(L, luaW_toboolean, 3, false);
+	
+	lua_pushboolean(L, with_border ? tm.on_board_with_border(loc) : tm.on_board(loc));
+	return 1;
+}
+
 static std::vector<gamemap::overlay_rule> read_rules_vector(lua_State *L, int index)
 {
 	std::vector<gamemap::overlay_rule> rules;
@@ -559,6 +569,8 @@ namespace lua_terrainmap {
 		lua_setfield(L, -2, "set_terrain");
 		lua_pushcfunction(L, intf_get_terrain);
 		lua_setfield(L, -2, "get_terrain");
+		lua_pushcfunction(L, intf_on_board);
+		lua_setfield(L, -2, "on_board");
 		if(use_tf) {
 			lua_pushcfunction(L, intf_mg_get_locations);
 			lua_setfield(L, -2, "get_locations");
