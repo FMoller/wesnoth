@@ -35,6 +35,11 @@ static lg::log_domain log_scripting_lua("scripting/lua");
 
 static const char terrainmapKey[] = "terrain map";
 static const char maplocationKey[] = "special locations";
+static const char mapReplaceIfFailedKey[] = "replace_if_failed terrain code";
+
+namespace replace_if_failed_idx {
+	enum {CODE = 1, MODE = 2};
+}
 
 using std::string_view;
 
@@ -250,16 +255,32 @@ static void luaW_push_terrain(lua_State* L, gamemap_base& map, map_location loc)
 	lua_pushstring(L, t_translation::write_terrain_code(t).c_str());
 }
 
-static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_location loc)
+static void impl_merge_terrain(lua_State* L, gamemap_base& map, map_location loc)
 {
 	auto mode = terrain_type_data::BOTH;
-	string_view t_str = luaL_checkstring(L, idx);
+	bool replace_if_failed = false;
+	string_view t_str;
+	if(luaL_testudata(L, 3, mapReplaceIfFailedKey)) {
+		replace_if_failed = true;
+		lua_getiuservalue(L, 3, replace_if_failed_idx::CODE);
+		t_str = luaL_checkstring(L, -1);
+		lua_getiuservalue(L, 3, replace_if_failed_idx::MODE);
+		mode = terrain_type_data::merge_mode(luaL_checkinteger(L, -1));
+	} else {
+		t_str = luaL_checkstring(L, 3);
+		if(t_str.front() == '^') {
+			mode = terrain_type_data::OVERLAY;
+		} else if(t_str.back() == '^') {
+			mode = terrain_type_data::BASE;
+		}
+	}
+	
 	auto ter = t_translation::read_terrain_code(t_str);
-	if(ter.base == t_translation::NO_LAYER && ter.overlay != t_translation::NO_LAYER)
-		mode = terrain_type_data::OVERLAY;
+	
 	if(auto gm = dynamic_cast<gamemap*>(&map)) {
 		if(resources::gameboard) {
-			bool result = resources::gameboard->change_terrain(loc, ter, mode, true);
+			bool result = resources::gameboard->change_terrain(loc, ter, mode, replace_if_failed);
+			
 			for(team& t : resources::gameboard->teams()) {
 				t.fix_villages(*gm);
 			}
@@ -268,7 +289,7 @@ static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_loc
 				resources::controller->get_display().needs_rebuild(result);
 			}
 		}
-	} else map.set_terrain(loc, ter, mode);
+	} else map.set_terrain(loc, ter, mode, replace_if_failed);
 }
 
 /**
@@ -315,76 +336,17 @@ static int impl_terrainmap_set(lua_State *L)
 {
 	gamemap_base& tm = luaW_checkterrainmap(L, 1);
 	map_location loc;
-	if(luaW_tolocation(L, 2, loc)) {
-		impl_merge_terrain(L, 3, tm, loc);
+	// The extra check that value (arg 3) isn't a number is because without it,
+	// map[4] = 5 would be interpreted as map[{4, 5}] = nil, due to the way
+	// luaW_tolocation modifies the stack if it finds a pair of numbers on it.
+	if(lua_type(L, 3) != LUA_TNUMBER && luaW_tolocation(L, 2, loc)) {
+		impl_merge_terrain(L, tm, loc);
 		return 0;
 	}
 	char const *m = luaL_checkstring(L, 2);
 	std::string err_msg = "unknown modifiable property of map: ";
 	err_msg += m;
 	return luaL_argerror(L, 2, err_msg.c_str());
-}
-
-
-/**
- * Sets a terrain code.
- * - Arg 1: map location.
- * - Arg 2: terrain code string.
- * - Arg 3: layer: (overlay|base|both, default=both)
- * - Arg 4: replace_if_failed, default = no
-*/
-static int intf_set_terrain(lua_State *L)
-{
-	gamemap_base& tm = luaW_checkterrainmap(L, 1);
-	map_location loc = luaW_checklocation(L, 2);
-	string_view t_str = luaL_checkstring(L, 3);
-
-	auto terrain = t_translation::read_terrain_code(t_str);
-	auto mode = terrain_type_data::BOTH;
-	bool replace_if_failed = false;
-
-	if(!lua_isnoneornil(L, 4)) {
-		string_view mode_str = luaL_checkstring(L, 4);
-		if(mode_str == "base") {
-			mode = terrain_type_data::BASE;
-		}
-		else if(mode_str == "overlay") {
-			mode = terrain_type_data::OVERLAY;
-		}
-		
-		if(!lua_isnoneornil(L, 5)) {
-			replace_if_failed = luaW_toboolean(L, 5);
-		}
-	}
-
-	if(auto gm = dynamic_cast<gamemap*>(&tm)) {
-		if(resources::gameboard) {
-			bool result = resources::gameboard->change_terrain(loc, terrain, mode, replace_if_failed);
-			
-			for(team& t : resources::gameboard->teams()) {
-				t.fix_villages(*gm);
-			}
-
-			if(resources::controller) {
-				resources::controller->get_display().needs_rebuild(result);
-			}
-		}
-	} else tm.set_terrain(loc, terrain, mode);
-	return 0;
-}
-
-/**
- * Gets a terrain code.
- * - Arg 1: map location.
- * - Ret 1: string.
- */
-static int intf_get_terrain(lua_State *L)
-{
-	gamemap_base& tm = luaW_checkterrainmap(L, 1);
-	map_location loc = luaW_checklocation(L, 2);
-
-	luaW_push_terrain(L, tm, loc);
-	return 1;
 }
 
 static int intf_on_board(lua_State* L)
@@ -508,6 +470,40 @@ int intf_terrain_mask(lua_State *L)
 	return 0;
 }
 
+static int intf_replace_if_failed(lua_State* L)
+{
+	auto mode = terrain_type_data::BOTH;
+	if(!lua_isnoneornil(L, 2)) {
+		string_view mode_str = luaL_checkstring(L, 2);
+		if(mode_str == "base") {
+			mode = terrain_type_data::BASE;
+		} else if(mode_str == "overlay") {
+			mode = terrain_type_data::OVERLAY;
+		} else if(mode_str != "both") {
+			return luaL_argerror(L, 2, "must be one of 'base', 'overlay', or 'both'");
+		}
+	}
+	
+	lua_newuserdatauv(L, 0, 2);
+	lua_pushinteger(L, int(mode));
+	lua_setiuservalue(L, -2, replace_if_failed_idx::MODE);
+	lua_pushvalue(L, 1);
+	lua_setiuservalue(L, -2, replace_if_failed_idx::CODE);
+	luaL_setmetatable(L, mapReplaceIfFailedKey);
+	return 1;
+}
+
+static int impl_replace_if_failed_tostring(lua_State* L)
+{
+	static const char* mode_strs[] = {"base", "overlay", "both"};
+	lua_getiuservalue(L, 1, replace_if_failed_idx::CODE);
+	string_view t_str = luaL_checkstring(L, -1);
+	lua_getiuservalue(L, 1, replace_if_failed_idx::MODE);
+	int mode = luaL_checkinteger(L, -1);
+	lua_pushfstring(L, "replace_if_failed('%s', '%s')", t_str.data(), mode_strs[mode]);
+	return 1;
+}
+
 namespace lua_terrainmap {
 	std::string register_metatables(lua_State* L, bool use_tf)
 	{
@@ -525,12 +521,10 @@ namespace lua_terrainmap {
 		lua_pushstring(L, terrainmapKey);
 		lua_setfield(L, -2, "__metatable");
 		// terrainmap methods
-		lua_pushcfunction(L, intf_set_terrain);
-		lua_setfield(L, -2, "set_terrain");
-		lua_pushcfunction(L, intf_get_terrain);
-		lua_setfield(L, -2, "get_terrain");
 		lua_pushcfunction(L, intf_on_board);
 		lua_setfield(L, -2, "on_board");
+		lua_pushcfunction(L, intf_replace_if_failed);
+		lua_setfield(L, -2, "replace_if_failed");
 		if(use_tf) {
 			lua_pushcfunction(L, intf_mg_get_locations);
 			lua_setfield(L, -2, "get_locations");
@@ -539,6 +533,10 @@ namespace lua_terrainmap {
 		}
 		lua_pushcfunction(L, intf_terrain_mask);
 		lua_setfield(L, -2, "terrain_mask");
+		
+		luaL_newmetatable(L, mapReplaceIfFailedKey);
+		lua_pushcfunction(L, impl_replace_if_failed_tostring);
+		lua_setfield(L, -2, "__tostring");
 
 		cmd_out << "Adding special locations metatable...\n";
 
