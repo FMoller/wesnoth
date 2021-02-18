@@ -34,13 +34,7 @@ static lg::log_domain log_scripting_lua("scripting/lua");
 #define ERR_LUA LOG_STREAM(err, log_scripting_lua)
 
 static const char terrainmapKey[] = "terrain map";
-static const char terraincolKey[] = "terrain map column";
 static const char maplocationKey[] = "special locations";
-
-// Uservalue indices for the terrain map colum userdata
-namespace terraincol {
-	enum {MAP = 1, COL = 2};
-}
 
 using std::string_view;
 
@@ -277,32 +271,6 @@ static void impl_merge_terrain(lua_State* L, int idx, gamemap_base& map, map_loc
 	} else map.set_terrain(loc, ter, mode);
 }
 
-static int impl_terrainmap_colget(lua_State* L)
-{
-	if(luaL_testudata(L, 1, terraincolKey)) {
-		lua_getiuservalue(L, 1, terraincol::MAP);
-		gamemap_base& map = luaW_checkterrainmap(L, -1);
-		lua_getiuservalue(L, 1, terraincol::COL);
-		int x = luaL_checkinteger(L, -1);
-		int y = luaL_checkinteger(L, 2);
-		luaW_push_terrain(L, map, {x, y, wml_loc()});
-		return 1;
-	}
-	return 0;
-}
-
-static int impl_terrainmap_colset(lua_State* L) {
-	if(luaL_testudata(L, 1, terraincolKey)) {
-		lua_getiuservalue(L, 1, terraincol::MAP);
-		gamemap_base& map = luaW_checkterrainmap(L, -1);
-		lua_getiuservalue(L, 1, terraincol::COL);
-		int x = luaL_checkinteger(L, -1);
-		int y = luaL_checkinteger(L, 2);
-		impl_merge_terrain(L, 3, map, {x, y, wml_loc()});
-	}
-	return 0;
-}
-
 /**
  * Gets some data on a map (__index metamethod).
  * - Arg 1: full userdata containing the map.
@@ -313,15 +281,7 @@ static int impl_terrainmap_get(lua_State *L)
 {
 	gamemap_base& tm = luaW_checkterrainmap(L, 1);
 	map_location loc;
-	if(lua_type(L, 2) == LUA_TNUMBER) {
-		lua_newuserdatauv(L, 0, 2);
-		lua_pushvalue(L, 1);
-		lua_setiuservalue(L, -2, terraincol::MAP);
-		lua_pushvalue(L, 2);
-		lua_setiuservalue(L, -2, terraincol::COL);
-		luaL_setmetatable(L, terraincolKey);
-		return 1;
-	} else if(luaW_tolocation(L, 2, loc)) {
+	if(luaW_tolocation(L, 2, loc)) {
 		luaW_push_terrain(L, tm, loc);
 		return 1;
 	}
@@ -579,14 +539,6 @@ namespace lua_terrainmap {
 		}
 		lua_pushcfunction(L, intf_terrain_mask);
 		lua_setfield(L, -2, "terrain_mask");
-		
-		luaL_newmetatable(L, terraincolKey);
-		lua_pushcfunction(L, impl_terrainmap_colget);
-		lua_setfield(L, -2, "__index");
-		lua_pushcfunction(L, impl_terrainmap_colset);
-		lua_setfield(L, -2, "__newindex");
-		lua_pushstring(L, terraincolKey);
-		lua_setfield(L, -2, "__metatable");
 
 		cmd_out << "Adding special locations metatable...\n";
 
