@@ -69,13 +69,6 @@ int impl_slocs_set(lua_State* L)
 	return 0;
 }
 
-int impl_slocs_len(lua_State *L)
-{
-	gamemap_base& m = luaW_checkterrainmap(L, 1);
-	lua_pushnumber(L, m.special_locations().size());
-	return 1;
-}
-
 int impl_slocs_next(lua_State *L)
 {
 	gamemap_base& m = luaW_checkterrainmap(L, lua_upvalueindex(1));
@@ -545,8 +538,6 @@ namespace lua_terrainmap {
 		lua_setfield(L, -2, "__index");
 		lua_pushcfunction(L, impl_slocs_set);
 		lua_setfield(L, -2, "__newindex");
-		lua_pushcfunction(L, impl_slocs_len);
-		lua_setfield(L, -2, "__len");
 		lua_pushcfunction(L, impl_slocs_iter);
 		lua_setfield(L, -2, "__pairs");
 		lua_pushstring(L, maplocationKey);

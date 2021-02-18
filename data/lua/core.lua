@@ -772,9 +772,15 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 	wesnoth.special_locations = wesnoth.deprecate_api('wesnoth.special_locations', 'wesnoth.map.get():special_locations', 1, nil, setmetatable({}, {
 		__index = function(_, k) return get_map().special_locations[k] end,
 		__newindex = function(_, k, v) get_map().special_locations[k] = v end,
-		__len = function(_) return #get_map().special_locations end,
+		__len = function(_)
+			local n = 0
+			for k,v in pairs(get_map().special_locations) do
+				n = n + 1
+			end
+			return n
+		end,
 		__pairs = function(_) return pairs(get_map().special_locations) end,
-	}))
+	}), 'Note: the length operator has been removed')
 else
 	--[========[Backwards compatibility for wml.tovconfig]========]
 	local fake_vconfig_mt = {
