@@ -33,7 +33,7 @@ end
 local function other_units_on_keep(leader)
     -- if we're on a keep, wait until there are no movable non-leader units on the castle before moving off
     local leader_score = high_score
-    if wesnoth.get_terrain_info(wesnoth.get_terrain(leader.x, leader.y)).keep then
+    if wesnoth.get_terrain_info(wesnoth.map.get():get_terrain(leader.x, leader.y)).keep then
         local castle = AH.get_locations_no_borders {
             { "and", {
                 x = leader.x, y = leader.y, radius = 200,
@@ -172,7 +172,7 @@ function ca_castle_switch:evaluation(cfg, data, filter_own, recruiting_leader)
 
         -- If we're on a keep,
         -- don't move to another keep unless it's much better when uncaptured villages are present
-        if best_score > 0 and wesnoth.get_terrain_info(wesnoth.get_terrain(leader.x, leader.y)).keep then
+        if best_score > 0 and wesnoth.get_terrain_info(wesnoth.map.get():get_terrain(leader.x, leader.y)).keep then
             local close_unowned_village = (wesnoth.get_villages {
                 { "and", {
                 x = leader.x,

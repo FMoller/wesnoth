@@ -30,8 +30,9 @@ local function wct_map_enemy_themed(race, pet, castle, village, chance)
 	if boss == nil then
 		return
 	end
+	local map = wesnoth.map.get()
 	--give themed castle
-	wesnoth.set_terrain(boss.loc, "K" .. castle, "base")
+	map:set_terrain(boss.loc, "K" .. castle, "base")
 	wesnoth.wml_actions.terrain {
 		terrain="C" .. castle,
 		wml.tag["and"] {
@@ -57,7 +58,7 @@ local function wct_map_enemy_themed(race, pet, castle, village, chance)
 	-- extra tweak with trees to elvish castle
 	for i, tile in ipairs(elvish_castle) do
 		if wesnoth.random(10) <= 4 then
-			wesnoth.set_terrain(tile, "Cv^Fet")
+			map:set_terrain(tile, "Cv^Fet")
 		end
 	end
 	-- adjacent themed villages

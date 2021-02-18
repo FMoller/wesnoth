@@ -786,10 +786,11 @@ function ai_helper.get_closest_location(hex, location_filter, unit)
         end
 
         local locs = wesnoth.get_locations(loc_filter)
+        local map = wesnoth.map.get()
 
         if unit then
             for _,loc in ipairs(locs) do
-                local movecost = unit:movement(wesnoth.get_terrain(loc[1], loc[2]))
+                local movecost = unit:movement(map:get_terrain(loc[1], loc[2]))
                 if (movecost <= unit.max_moves) then return loc end
             end
         else
@@ -810,12 +811,13 @@ function ai_helper.get_passable_locations(location_filter, unit)
 
     -- All hexes that are not on the map border
     local all_locs = ai_helper.get_locations_no_borders(location_filter)
+    local map = wesnoth.map.get()
 
     -- If @unit is provided, exclude terrain that's impassable for the unit
     if unit then
         local locs = {}
         for _,loc in ipairs(all_locs) do
-            local movecost = unit:movement(wesnoth.get_terrain(loc[1], loc[2]))
+            local movecost = unit:movement(map:get_terrain(loc[1], loc[2]))
             if (movecost <= unit.max_moves) then table.insert(locs, loc) end
         end
         return locs
@@ -828,10 +830,11 @@ function ai_helper.get_healing_locations(location_filter)
     -- Finds all locations matching @location_filter that provide healing, excluding border hexes.
 
     local all_locs = ai_helper.get_locations_no_borders(location_filter)
+    local map = wesnoth.map.get()
 
     local locs = {}
     for _,loc in ipairs(all_locs) do
-        if wesnoth.get_terrain_info(wesnoth.get_terrain(loc[1],loc[2])).healing > 0 then
+        if wesnoth.get_terrain_info(map:get_terrain(loc[1],loc[2])).healing > 0 then
             table.insert(locs, loc)
         end
     end
@@ -1517,12 +1520,13 @@ function ai_helper.next_hop(unit, x, y, cfg)
         unit:to_map(old_x, old_y)
         unit_in_way:to_map()
 
-        local terrain = wesnoth.get_terrain(next_hop_ideal[1], next_hop_ideal[2])
+        local map = wesnoth.map.get()
+        local terrain = map:get_terrain(next_hop_ideal[1], next_hop_ideal[2])
         local move_cost_endpoint = unit:movement_on(terrain)
         local inverse_reach_map = LS.create()
         for _,r in pairs(inverse_reach) do
             -- We want the moves left for moving into the opposite direction in which the reach map was calculated
-            local terrain = wesnoth.get_terrain(r[1], r[2])
+            local terrain = map:get_terrain(r[1], r[2])
             local move_cost = unit:movement_on(terrain)
             local inverse_cost = r[3] + move_cost - move_cost_endpoint
             inverse_reach_map:insert(r[1], r[2], inverse_cost)
@@ -1727,7 +1731,7 @@ function ai_helper.custom_cost_with_avoid(x, y, prev_cost, unit, avoid_map, ally
     end
 
     local max_moves = unit.max_moves
-    local terrain = wesnoth.get_terrain(x, y)
+    local terrain = wesnoth.map.get():get_terrain(x, y)
     local move_cost = unit:movement_on(terrain)
 
     if (move_cost > max_moves) then

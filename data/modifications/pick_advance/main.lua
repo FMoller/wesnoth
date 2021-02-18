@@ -201,7 +201,7 @@ local function map_has_keeps()
 	local width,height,_ = wesnoth.get_map_size()
 	for x = 1, width do
 		for y = 1, height do
-			local terr = wesnoth.get_terrain(x, y)
+			local terr = wesnoth.map.get():get_terrain(x, y)
 			local info = wesnoth.get_terrain_info(terr)
 			if info.keep then
 				return true

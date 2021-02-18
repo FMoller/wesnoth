@@ -418,10 +418,11 @@ function wml_actions.store_locations(cfg)
 	-- the variable can be mentioned in a [find_in] subtag, so it
 	-- cannot be cleared before the locations are recovered
 	local locs = wesnoth.get_locations(cfg)
+	local map = wesnoth.map.get()
 	local writer = utils.vwriter.init(cfg, "location")
 	for i, loc in ipairs(locs) do
 		local x, y = loc[1], loc[2]
-		local t = wesnoth.get_terrain(x, y)
+		local t = map:get_terrain(x, y)
 		local res = { x = x, y = y, terrain = t }
 		if wesnoth.get_terrain_info(t).village then
 			res.owner_side = wesnoth.get_village_owner(x, y) or 0
@@ -509,10 +510,11 @@ end
 
 function wml_actions.terrain(cfg)
 	local terrain = cfg.terrain or wml.error("[terrain] missing required terrain= attribute")
+	local map = wesnoth.map.get()
 	cfg = wml.shallow_parsed(cfg)
 	cfg.terrain = nil
 	for i, loc in ipairs(wesnoth.get_locations(cfg)) do
-		wesnoth.set_terrain(loc[1], loc[2], terrain, cfg.layer, cfg.replace_if_failed)
+		map:set_terrain(loc[1], loc[2], terrain, cfg.layer, cfg.replace_if_failed)
 	end
 end
 
@@ -646,10 +648,11 @@ end
 
 function wml_actions.store_starting_location(cfg)
 	local writer = utils.vwriter.init(cfg, "location")
+	local map = wesnoth.map.get()
 	for _, side in ipairs(wesnoth.sides.find(cfg)) do
 		local loc = side.starting_location
 		if loc then
-			local terrain = wesnoth.get_terrain(loc[1], loc[2])
+			local terrain = map:get_terrain(loc[1], loc[2])
 			local result = { x = loc[1], y = loc[2], terrain = terrain }
 			if wesnoth.get_terrain_info(terrain).village then
 				result.owner_side = wesnoth.get_village_owner(loc[1], loc[2]) or 0
@@ -662,11 +665,12 @@ end
 function wml_actions.store_villages( cfg )
 	local villages = wesnoth.get_villages( cfg )
 	local writer = utils.vwriter.init(cfg, "location")
+	local map = wesnoth.map.get()
 	for index, village in ipairs( villages ) do
 		utils.vwriter.write(writer, {
 			x = village[1],
 			y = village[2],
-			terrain = wesnoth.get_terrain( village[1], village[2] ),
+			terrain = map:get_terrain( village[1], village[2] ),
 			owner_side = wesnoth.get_village_owner( village[1], village[2] ) or 0
 		})
 	end
@@ -956,30 +960,32 @@ function wesnoth.wml_actions.store_unit_defense(cfg)
 	wesnoth.deprecated_message("[store_unit_defense]", 3, "1.17.0", "This function returns the chance to be hit, high values represent bad defenses. Using [store_unit_defense_on] is recommended instead.")
 
 	local unit = wesnoth.units.find_on_map(cfg)[1] or wml.error "[store_unit_defense]'s filter didn't match any unit"
+	local map = wesnoth.map.get()
 	local terrain = cfg.terrain
 	local defense
 
 	if terrain then
 		defense = unit:chance_to_be_hit(terrain)
 	elseif cfg.loc_x and cfg.loc_y then
-		defense = unit:chance_to_be_hit(wesnoth.get_terrain(cfg.loc_x, cfg.loc_y))
+		defense = unit:chance_to_be_hit(map:get_terrain(cfg.loc_x, cfg.loc_y))
 	else
-		defense = unit:chance_to_be_hit(wesnoth.get_terrain(unit.x, unit.y))
+		defense = unit:chance_to_be_hit(map:get_terrain(unit.x, unit.y))
 	end
 	wml.variables[cfg.variable or "terrain_defense"] = defense
 end
 
 function wesnoth.wml_actions.store_unit_defense_on(cfg)
 	local unit = wesnoth.units.find_on_map(cfg)[1] or wml.error "[store_unit_defense_on]'s filter didn't match any unit"
+	local map = wesnoth.map.get()
 	local terrain = cfg.terrain
 	local defense
 
 	if terrain then
 		defense = unit:defense_on(terrain)
 	elseif cfg.loc_x and cfg.loc_y then
-		defense = unit:defense_on(wesnoth.get_terrain(cfg.loc_x, cfg.loc_y))
+		defense = unit:defense_on(map:get_terrain(cfg.loc_x, cfg.loc_y))
 	else
-		defense = unit:defense_on(wesnoth.get_terrain(unit.x, unit.y))
+		defense = unit:defense_on(map:get_terrain(unit.x, unit.y))
 	end
 	wml.variables[cfg.variable or "terrain_defense"] = defense
 end
@@ -1018,7 +1024,7 @@ function wml_actions.terrain_mask(cfg)
 	if cfg.mask_file then
 		mask = wesnoth.read_file(cfg.mask_file)
 	end
-	wesnoth.terrain_mask({x, y}, mask, {
+	wesnoth.map.get():terrain_mask({x, y}, mask, {
 		is_odd = is_odd,
 		rules = rules,
 		ignore_special_locations = cfg.ignore_special_locations,

@@ -343,7 +343,7 @@ return {
                 { "and", params.filter_own }
             }[1]
 
-            if (not leader) or (not wesnoth.get_terrain_info(wesnoth.get_terrain(leader.x, leader.y)).keep) then
+            if (not leader) or (not wesnoth.get_terrain_info(wesnoth.map.get():get_terrain(leader.x, leader.y)).keep) then
                 return 0
             end
 

@@ -56,7 +56,7 @@ function ca_fast_attack_utils.gamedata_setup()
     local healing_map = {}
     for _,loc in ipairs(AH.get_healing_locations {}) do
         if (not healing_map[loc[1]]) then healing_map[loc[1]] = {} end
-        healing_map[loc[1]][loc[2]] = wesnoth.get_terrain_info(wesnoth.get_terrain(loc[1], loc[2])).healing
+        healing_map[loc[1]][loc[2]] = wesnoth.get_terrain_info(wesnoth.map.get():get_terrain(loc[1], loc[2])).healing
     end
     gamedata.healing_map = healing_map
 
@@ -157,7 +157,7 @@ function ca_fast_attack_utils.get_unit_defense(unit_copy, x, y, defense_maps)
     if (not defense_maps[unit_copy.id][x]) then defense_maps[unit_copy.id][x] = {} end
 
     if (not defense_maps[unit_copy.id][x][y]) then
-        local defense = unit_copy:defense_on(wesnoth.get_terrain(x, y)) / 100.
+        local defense = unit_copy:defense_on(wesnoth.map.get():get_terrain(x, y)) / 100.
         defense_maps[unit_copy.id][x][y] = { defense = defense }
     end
 

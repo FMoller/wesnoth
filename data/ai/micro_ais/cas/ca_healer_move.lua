@@ -35,13 +35,14 @@ function ca_healer_move:evaluation(cfg, data)
         { "and", wml.get_child(cfg, "filter_second") }
     }
 
+    local map = wesnoth.map.get()
     local healees, healees_MP = {}, {}
     for _,healee in ipairs(all_healees) do
         -- Potential healees are units without MP that don't already have a healer (also without MP) next to them
         -- Also, they cannot be on a healing location or regenerate
         if (healee.moves == 0) then
             if (not healee:matches { ability = "regenerates" }) then
-                local healing = wesnoth.get_terrain_info(wesnoth.get_terrain(healee.x, healee.y)).healing
+                local healing = wesnoth.get_terrain_info(map:get_terrain(healee.x, healee.y)).healing
                 if (healing == 0) then
                     local is_healee = true
                     for _,healer in ipairs(healers_noMP) do
@@ -100,7 +101,7 @@ function ca_healer_move:evaluation(cfg, data)
                 rating = rating - enemies_in_reach * 1000
 
                 -- All else being more or less equal, prefer villages and strong terrain
-                local terrain = wesnoth.get_terrain(x, y)
+                local terrain = map:get_terrain(x, y)
                 local is_village = wesnoth.get_terrain_info(terrain).village
                 if is_village then rating = rating + 2 end
 

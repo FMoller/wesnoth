@@ -37,7 +37,7 @@ end
 
 function bonus.place_item(x, y, image)
 	if image == "campfire" then
-		wesnoth.set_terrain(x, y, "*^Ecf", "overlay")
+		wesnoth.map.get():set_terrain(x, y, "*^Ecf", "overlay")
 		image = nil
 	else
 		image = image or "scenery/lighthouse.png"

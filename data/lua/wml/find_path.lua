@@ -159,7 +159,7 @@ function wesnoth.wml_actions.find_path(cfg)
 			wml.variables[string.format( "%s.step[%d]", variable, index - 1 )] =
 				{  -- this structure takes less space in the inspection window
 					x = path_loc[1], y = path_loc[2],
-					terrain = wesnoth.get_terrain( path_loc[1], path_loc[2] ),
+					terrain = wesnoth.map.get():get_terrain( path_loc[1], path_loc[2] ),
 					movement_cost = sub_cost,
 					required_turns = sub_turns
 				}
