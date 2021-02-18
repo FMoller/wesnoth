@@ -736,7 +736,7 @@ if wesnoth.kernel_type() == "Game Lua Kernel" then
 		return wesnoth.map.get_label(self.x, self.y, who)
 	end
 	
-	function hex_mt:match(filter)
+	function hex_mt:matches(filter)
 		return wesnoth.map.matches_location(self.x, self.y, filter)
 	end
 	
